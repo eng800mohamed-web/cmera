@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام الحضور والانصراف بالتعرف على الوجه</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js"></script>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --accent-color: #e74c3c;
+            --success-color: #2ecc71;
+            --warning-color: #f39c12;
+            --light-color: #ecf0f1;
+            --dark-color: #34495e;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #f5f7fa;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .container {
+            width: 95%;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            background: linear-gradient(135deg, var(--primary-color), var(--dark-color));
+            color: white;
+            padding: 20px 0;
+            text-align: center;
+            border-radius: 0 0 10px 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        header h1 {
+            margin-bottom: 10px;
+            font-size: 2.2rem;
+        }
+        
+        nav {
+            background-color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+        
+        .nav-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary {
+            background-color: var(--secondary-color);
+            color: white;
+        }
+        
+        .btn-success {
+            background-color: var(--success-color);
+            color: white;
+        }
+        
+        .btn-warning {
+            background-color: var(--warning-color);
+            color: white;
+        }
+        
+        .btn-danger {
+            background-color: var(--accent-color);
+            color: white;
+        }
+        
+        .btn:hover {
+            opacity: 0.9;
+            transform: translateY(-2px);
+        }
+        
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        }
+        
+        .card-title {
+            font-size: 1.4rem;
+            margin-bottom: 15px;
+            color: var(--primary-color);
+            border-bottom: 2px solid var(--light-color);
+            padding-bottom: 10px;
+        }
+        
+        .video-container {
+            position: relative;
+            width: 100%;
+            height: 0;
+            padding-bottom: 75%;
+            background-color: #000;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        #video {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .canvas-container {
+            position: relative;
+            margin-top: 20px;
+        }
+        
+        #canvas {
+            width: 100%;
+            border-radius: 8px;
+            display: block;
+        }
+        
+        .employee-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .employee-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .employee-item:last-child {
+            border-bottom: none;
+        }
+        
+        .employee-name {
+            font-weight: 600;
+        }
+        
+        .attendance-time {
+            color: #777;
+            font-size: 0.9rem;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-left: 8px;
+        }
+        
+        .status-present {
+            background-color: var(--success-color);
+        }
+        
+        .status-absent {
+            background-color: var(--accent-color);
+        }
+        
+        .attendance-stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, var(--secondary-color), var(--primary-color));
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin: 10px 0;
+        }
+        
+        .stat-label {
+            font-size: 1rem;
+            opacity: 0.9;
+        }
+        
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            padding: 20px;
+            color: #777;
+            border-top: 1px solid #eee;
+        }
+        
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 200px;
+            flex-direction: column;
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top-color: var(--secondary-color);
+            animation: spin 1s ease-in-out infinite;
+            margin-bottom: 15px;
+        }
+        
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+        
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 5px;
+            color: white;
+            opacity: 0;
+            transform: translateX(100%);
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+        
+        .notification.show {
+            opacity: 1;
+            transform: translateX(0);
+        }
+        
+        .notification.success {
+            background-color: var(--success-color);
+        }
+        
+        .notification.error {
+            background-color: var(--accent-color);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>نظام الحضور والانصراف الذكي</h1>
+            <p>باستخدام تقنية التعرف على الوجه</p>
+        </div>
+    </header>
+
+    <div class="container">
+        <nav>
+            <div class="nav-buttons">
+                <button class="btn btn-primary" id="startCamera">تشغيل الكاميرا</button>
+                <button class="btn btn-success" id="registerFace">تسجيل موظف جديد</button>
+                <button class="btn btn-warning" id="markAttendance">تسجيل الحضور</button>
+                <button class="btn btn-danger" id="markDeparture">تسجيل الانصراف</button>
+            </div>
+        </nav>
+
+        <div class="main-content">
+            <div class="card">
+                <h2 class="card-title">الكاميرا المباشرة</h2>
+                <div class="video-container">
+                    <video id="video" autoplay playsinline></video>
+                    <canvas id="canvas" width="640" height="480"></canvas>
+                </div>
+                <div class="loading" id="cameraLoading">
+                    <div class="spinner"></div>
+                    <p>جاري تحميل نماذج التعرف على الوجوه...</p>
+                </div>
+                <div id="faceDetectionResult" style="margin-top: 20px; text-align: center;"></div>
+            </div>
+
+            <div class="card">
+                <h2 class="card-title">سجل الحضور اليوم</h2>
+                <div class="employee-list" id="attendanceList">
+                    <!-- سيتم ملء هذه القائمة ديناميكيًا -->
+                </div>
+
+                <div class="attendance-stats">
+                    <div class="stat-card">
+                        <div class="stat-number" id="totalEmployees">0</div>
+                        <div class="stat-label">عدد الموظفين</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="presentToday">0</div>
+                        <div class="stat-label">حضروا اليوم</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <div class="container">
+            <p>نظام الحضور والانصراف الذكي - تم التطوير باستخدام تقنيات الذكاء الاصطناعي</p>
+            <p>© 2023 جميع الحقوق محفوظة</p>
+        </div>
+    </footer>
+
+    <div class="notification" id="notification"></div>
+
+    <script>
+        /* ===================== IndexedDB ===================== */
+        let db;
+        const DB_NAME = "AttendanceDB";
+        const DB_VERSION = 1;
+
+        function initDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+                request.onupgradeneeded = e => {
+                    db = e.target.result;
+                    if (!db.objectStoreNames.contains("employees"))
+                        db.createObjectStore("employees", { keyPath: "name" });
+                    if (!db.objectStoreNames.contains("attendance"))
+                        db.createObjectStore("attendance", { autoIncrement: true });
+                };
+
+                request.onsuccess = e => {
+                    db = e.target.result;
+                    resolve();
+                };
+
+                request.onerror = () => reject("DB Error");
+            });
+        }
+
+        function addEmployee(employee) {
+            return new Promise(resolve => {
+                const tx = db.transaction("employees", "readwrite");
+                tx.objectStore("employees").put(employee);
+                tx.oncomplete = resolve;
+            });
+        }
+
+        function getAllEmployees() {
+            return new Promise(resolve => {
+                const tx = db.transaction("employees", "readonly");
+                const req = tx.objectStore("employees").getAll();
+                req.onsuccess = () => resolve(req.result);
+            });
+        }
+
+        function addAttendance(record) {
+            return new Promise(resolve => {
+                const tx = db.transaction("attendance", "readwrite");
+                tx.objectStore("attendance").add(record);
+                tx.oncomplete = resolve;
+            });
+        }
+
+        function getTodayAttendance() {
+            const today = new Date().toDateString();
+            return new Promise(resolve => {
+                const tx = db.transaction("attendance", "readonly");
+                const req = tx.objectStore("attendance").getAll();
+                req.onsuccess = () =>
+                    resolve(req.result.filter(r => r.date === today));
+            });
+        }
+
+        /* ===================== DOM ===================== */
+        const video = document.getElementById("video");
+        const canvas = document.getElementById("canvas");
+        const startCameraBtn = document.getElementById("startCamera");
+        const registerFaceBtn = document.getElementById("registerFace");
+        const markAttendanceBtn = document.getElementById("markAttendance");
+        const markDepartureBtn = document.getElementById("markDeparture");
+        const cameraLoading = document.getElementById("cameraLoading");
+        const attendanceList = document.getElementById("attendanceList");
+        const notification = document.getElementById("notification");
+        const totalEmployeesEl = document.getElementById("totalEmployees");
+        const presentTodayEl = document.getElementById("presentToday");
+
+        let isCameraOn = false;
+        let labeledDescriptors = [];
+
+        /* ===================== Helpers ===================== */
+        function showNotification(msg, type) {
+            notification.textContent = msg;
+            notification.className = `notification ${type} show`;
+            setTimeout(() => notification.className = "notification", 3000);
+        }
+
+        /* ===================== Init ===================== */
+        async function init() {
+            try {
+                await initDB();
+
+                await Promise.all([
+                    faceapi.nets.tinyFaceDetector.loadFromUri("models"),
+                    faceapi.nets.faceLandmark68Net.loadFromUri("models"),
+                    faceapi.nets.faceRecognitionNet.loadFromUri("models")
+                ]);
+
+                await loadFacesFromDB();
+                cameraLoading.style.display = "none";
+                showNotification("النظام جاهز للعمل", "success");
+            } catch (error) {
+                console.error("Error initializing system:", error);
+                cameraLoading.innerHTML = `
+                    <p style="color: #e74c3c;">خطأ في تحميل النظام</p>
+                    <p>يرجى التحقق من اتصال الإنترنت</p>
+                `;
+            }
+        }
+
+        async function loadFacesFromDB() {
+            const employees = await getAllEmployees();
+            labeledDescriptors = employees.map(e =>
+                new faceapi.LabeledFaceDescriptors(
+                    e.name,
+                    [new Float32Array(e.descriptor)]
+                )
+            );
+            
+            // تحديث عدد الموظفين
+            totalEmployeesEl.textContent = employees.length;
+        }
+
+        /* ===================== Camera ===================== */
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: {} });
+                video.srcObject = stream;
+                isCameraOn = true;
+                startCameraBtn.textContent = "إيقاف الكاميرا";
+                detectFaces();
+            } catch (error) {
+                console.error('Error accessing camera:', error);
+                showNotification('تعذر الوصول إلى الكاميرا', 'error');
+            }
+        }
+
+        function stopCamera() {
+            video.srcObject.getTracks().forEach(t => t.stop());
+            isCameraOn = false;
+            startCameraBtn.textContent = "تشغيل الكاميرا";
+        }
+
+        async function detectFaces() {
+            const ctx = canvas.getContext("2d");
+            const size = { width: video.width, height: video.height };
+            faceapi.matchDimensions(canvas, size);
+
+            setInterval(async () => {
+                if (!isCameraOn) return;
+
+                const detections = await faceapi
+                    .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+                    .withFaceLandmarks();
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                faceapi.draw.drawDetections(canvas, detections);
+            }, 200);
+        }
+
+        /* ===================== Register Face ===================== */
+        registerFaceBtn.onclick = async () => {
+            if (!isCameraOn) return showNotification("شغّل الكاميرا أولاً", "error");
+
+            const det = await faceapi
+                .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+                .withFaceLandmarks()
+                .withFaceDescriptor();
+
+            if (!det) return showNotification("لم يتم اكتشاف وجه", "error");
+
+            const name = prompt("اسم الموظف:");
+            if (!name) return;
+
+            await addEmployee({
+                name,
+                descriptor: Array.from(det.descriptor)
+            });
+
+            await loadFacesFromDB();
+            showNotification(`تم تسجيل ${name}`, "success");
+        };
+
+        /* ===================== Attendance ===================== */
+        async function mark(type) {
+            if (!isCameraOn) return showNotification("شغّل الكاميرا", "error");
+            if (!labeledDescriptors.length)
+                return showNotification("لا يوجد موظفين مسجلين", "error");
+
+            const det = await faceapi
+                .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+                .withFaceLandmarks()
+                .withFaceDescriptor();
+
+            if (!det) return showNotification("لم يتم اكتشاف وجه", "error");
+
+            const matcher = new faceapi.FaceMatcher(labeledDescriptors);
+            const match = matcher.findBestMatch(det.descriptor);
+
+            if (match.distance > 0.6)
+                return showNotification("وجه غير معروف", "error");
+
+            const record = {
+                name: match.label,
+                type,
+                time: new Date().toLocaleTimeString("ar-SA"),
+                date: new Date().toDateString()
+            };
+
+            await addAttendance(record);
+            updateAttendanceUI();
+            showNotification(`${type} ${record.name}`, "success");
+        }
+
+        markAttendanceBtn.onclick = () => mark("حضور");
+        markDepartureBtn.onclick = () => mark("انصراف");
+
+        /* ===================== UI ===================== */
+        async function updateAttendanceUI() {
+            const records = await getTodayAttendance();
+            attendanceList.innerHTML = "";
+            
+            // حساب عدد الحاضرين
+            const presentCount = new Set(records.filter(r => r.type === "حضور").map(r => r.name)).size;
+            presentTodayEl.textContent = presentCount;
+            
+            // عرض السجلات
+            records.forEach(r => {
+                attendanceList.innerHTML += `
+                    <div class="employee-item">
+                        <strong>${r.name}</strong>
+                        <span>${r.type} - ${r.time}</span>
+                    </div>
+                `;
+            });
+            
+            // إذا لم توجد سجلات
+            if (records.length === 0) {
+                attendanceList.innerHTML = `
+                    <div style="text-align: center; padding: 20px; color: #777;">
+                        لا توجد سجلات حضور لهذا اليوم
+                    </div>
+                `;
+            }
+        }
+
+        /* ===================== Events ===================== */
+        startCameraBtn.onclick = () => {
+            isCameraOn ? stopCamera() : startCamera();
+        };
+
+        // تحديث واجهة المستخدم عند التحميل
+        window.onload = async () => {
+            await init();
+            await updateAttendanceUI();
+        };
+    </script>
+</body>
+</html>
